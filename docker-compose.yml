@@ -1,0 +1,76 @@
+##############################################################################
+# Wordpress + Nginx + Redis + Mysql                                          #
+#                                                                            #
+# @author Halil Öncen <haliloncendev@gmail.com>                              #
+# 25 Mayis 2020, gunesli bir Aydin sabahinda cayimi yudumlarken.. :)         #
+##############################################################################
+
+version: '3'
+
+networks:
+  wp-net:
+    driver: bridge
+
+services:
+  redis:
+    image: redis
+    container_name: redis
+    restart: always
+    networks:
+      - wp-net
+
+  mysql:
+    depends_on:
+      - redis
+    image: mysql:8.0
+    container_name: mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: <root-pass>
+      MYSQL_DATABASE: <wp-db-name>
+      MYSQL_USER: <wp-db-user>
+      MYSQL_PASSWORD: <wp-db-user-pass>
+    volumes:
+      - ./data/mysql:/var/lib/mysql
+    command: '--default-authentication-plugin=mysql_native_password'
+    networks:
+      - wp-net
+
+  wordpress:
+    depends_on:
+      - mysql
+    build: ./config/wordpress
+    container_name: wordpress
+    restart: always
+    environment:
+      WORDPRESS_DB_HOST: mysql:3306
+      WORDPRESS_DB_NAME: <wp-db-name>
+      WORDPRESS_DB_USER: <wp-db-user>
+      WORDPRESS_DB_PASSWORD: <wp-db-user-pass>
+      WORDPRESS_CONFIG_EXTRA: |
+        define('WP_REDIS_HOST', 'redis');
+        define('FS_METHOD', 'direct');
+        define( 'WP_DEBUG', true );
+        define( 'WP_DEBUG_DISPLAY', false );
+        define( 'WP_DEBUG_LOG', true );
+    volumes:
+      - ./data/wordpress:/var/www/html
+      - ./config/php.ini:/usr/local/etc/php/conf.d/php.ini
+    networks:
+      - wp-net
+
+  nginx:
+    depends_on:
+      - wordpress
+    image: nginx:1.18-alpine
+    container_name: nginx
+    restart: always
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./data/wordpress:/var/www/html
+      - ./config/nginx/nginx.conf:/etc/nginx/conf.d/nginx.conf
+      - ./config/nginx/ssl:/etc/ssl
+    networks:
+      - wp-net
